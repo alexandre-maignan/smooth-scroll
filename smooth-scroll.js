@@ -48,7 +48,6 @@ function initSmoothScroll(options = {}) {
         log('Smooth disabled');
     }
 
-    // --- Stop animation when dragging scrollbar ---
     document.addEventListener("mousedown", () => {
         draggingScrollbar = true;
         if (rafId) cancelAnimationFrame(rafId);
@@ -81,7 +80,6 @@ function initSmoothScroll(options = {}) {
         }
     }
 
-    // --- NEW: STOP SMOOTH SCROLL WHEN USING KEYBOARD (arrows, pgup, pgdn, etc) ---
     window.addEventListener("keydown", (e) => {
         const keys = [
             "ArrowUp",
@@ -92,31 +90,22 @@ function initSmoothScroll(options = {}) {
             "End",
             "Space"
         ];
-
         if (!keys.includes(e.code)) return;
-
-        // Stop the animation instantly
         if (rafId) cancelAnimationFrame(rafId);
         rafId = null;
-
-        // Sync to native scroll position
         current = target = window.scrollY;
     });
 
     function render() {
         if (!smoothEnabled || draggingScrollbar) return;
-
         const diff = target - current;
-
         if (Math.abs(diff) < SmoothConfig.stopThreshold) {
             current = target;
             rafId = null;
             return;
         }
-
         current += diff * SmoothConfig.ease;
         window.scrollTo({ top: Math.round(current), behavior: "auto" });
-
         rafId = requestAnimationFrame(render);
     }
 
@@ -125,7 +114,6 @@ function initSmoothScroll(options = {}) {
             document.body.scrollHeight,
             document.documentElement.scrollHeight
         );
-
         if (pageHeight <= window.innerHeight * SmoothConfig.minPageHeightRatio) {
             disableSmooth();
             return false;
@@ -149,16 +137,13 @@ function initSmoothScroll(options = {}) {
         }, 120);
     });
 
-    // Internal links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
             const targetId = this.getAttribute('href');
             const targetEl = document.querySelector(targetId);
             if (!targetEl) return;
 
-            if (window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT) {
-                return;
-            }
+            if (window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT) return;
 
             e.preventDefault();
 
@@ -173,9 +158,4 @@ function initSmoothScroll(options = {}) {
     });
 }
 
-initSmoothScroll({
-    DEBUG: false,
-    ease: 0.06,
-    scrollMult: 1.2
-});
 
