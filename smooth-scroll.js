@@ -1,136 +1,162 @@
-(function (global) {
-    function initSmoothScroll(options = {}) {
-        const SmoothConfig = {
-            DEBUG: false,
-            MOBILE_BREAKPOINT: 768,
-            ease: 0.06,           
-            stopThreshold: 0.05,  
-            scrollMult: 1.5,          // intensité du scroll
-            minPageHeightRatio: 1.05,
-            offset: 0,
-            ...options,               // options personnalisées (peut surcharger scrollMult)
-        };
+function initSmoothScroll(options = {}) {
+    const SmoothConfig = {
+        DEBUG: false,
+        MOBILE_BREAKPOINT: 768,
+        ease: 0.03,
+        scrollMult: 1,
+        stopThreshold: 0.1,
+        minPageHeightRatio: 1.05,
+        ...options
+    };
 
-        let enabled = false;
-        let current = 0;
-        let target = 0;
-        let rafId = null;
+    let smoothEnabled = false;
+    let current = 0;
+    let target = 0;
+    let rafId = null;
 
-        const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
-        const round = v => Math.round(v * 100) / 100;
+    const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
+    const log = (...args) => { if (SmoothConfig.DEBUG) console.log('[smooth]', ...args); };
 
-        function updateScrollBehavior() {
-            const behavior = window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT ? "" : "auto";
-            document.documentElement.style.scrollBehavior = behavior;
-            document.body.style.scrollBehavior = behavior;
+    function updateScrollBehavior() {
+        if (window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT) {
+            document.documentElement.style.scrollBehavior = "";
+            document.body.style.scrollBehavior = "";
+        } else {
+            document.documentElement.style.scrollBehavior = "auto";
+            document.body.style.scrollBehavior = "auto";
         }
+    }
 
-        function enable() {
-            if (enabled) return;
-            enabled = true;
+    function enableSmooth() {
+        if (smoothEnabled) return;
+        smoothEnabled = true;
+        current = window.scrollY;
+        target = window.scrollY;
+        window.addEventListener('wheel', onWheel, { passive: false });
+        window.addEventListener('scroll', onNativeScroll, { passive: true });
+        log('Smooth enabled');
+    }
 
-            current = target = window.scrollY;
+    function disableSmooth() {
+        if (!smoothEnabled) return;
+        smoothEnabled = false;
+        window.removeEventListener('wheel', onWheel);
+        window.removeEventListener('scroll', onNativeScroll);
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        log('Smooth disabled');
+    }
 
-            window.addEventListener("wheel", onWheel, { passive: false });
-            window.addEventListener("scroll", syncScroll, { passive: true });
+    // Gestion de la molette
+    function onWheel(e) {
+        if (!smoothEnabled) return;
+        if (e.ctrlKey) return;
+        e.preventDefault();
+
+        const maxScroll = Math.max(
+            document.body.scrollHeight,
+            document.documentElement.scrollHeight
+        ) - window.innerHeight;
+
+        target = clamp(target + e.deltaY * SmoothConfig.scrollMult, 0, maxScroll);
+
+        if (!rafId) render();
+    }
+
+    function onNativeScroll() {
+        if (!rafId) {
+            target = current = window.scrollY;
         }
+    }
 
-        function disable() {
-            if (!enabled) return;
-            enabled = false;
+    // Stop smooth scroll avec touches clavier
+    window.addEventListener("keydown", (e) => {
+        const keys = [
+            "ArrowUp", "ArrowDown",
+            "PageUp", "PageDown",
+            "Home", "End",
+            "Space"
+        ];
 
-            window.removeEventListener("wheel", onWheel);
-            window.removeEventListener("scroll", syncScroll);
+        if (!keys.includes(e.code)) return;
 
-            if (rafId) cancelAnimationFrame(rafId);
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+
+        current = target = window.scrollY;
+    });
+
+    function render() {
+        if (!smoothEnabled) return;
+
+        const diff = target - current;
+
+        if (Math.abs(diff) < SmoothConfig.stopThreshold) {
+            current = target;
             rafId = null;
+            return;
         }
 
-        function onWheel(e) {
-            if (e.ctrlKey) return;
+        current += diff * SmoothConfig.ease;
+        window.scrollTo({ top: Math.round(current), behavior: "auto" });
+
+        rafId = requestAnimationFrame(render);
+    }
+
+    function checkDevice() {
+        const pageHeight = Math.max(
+            document.body.scrollHeight,
+            document.documentElement.scrollHeight
+        );
+
+        if (pageHeight <= window.innerHeight * SmoothConfig.minPageHeightRatio) {
+            disableSmooth();
+            return false;
+        }
+        if (window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT) {
+            disableSmooth();
+            return false;
+        }
+        enableSmooth();
+        return true;
+    }
+
+    updateScrollBehavior();
+    checkDevice();
+
+    window.addEventListener("resize", () => {
+        clearTimeout(window.__smooth_resize_timer);
+        window.__smooth_resize_timer = setTimeout(() => {
+            updateScrollBehavior();
+            checkDevice();
+        }, 120);
+    });
+
+    // Smooth scroll pour liens internes
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function(e) {
+            const targetId = this.getAttribute('href');
+            const targetEl = document.querySelector(targetId);
+            if (!targetEl) return;
+
+            if (window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT) return;
 
             e.preventDefault();
 
-            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-            // utilisation de scrollMult pour ajuster l'intensité du scroll
-            target = clamp(target + e.deltaY * SmoothConfig.scrollMult, 0, maxScroll);
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = null;
+
+            current = target = window.scrollY;
+            target = targetEl.getBoundingClientRect().top + window.scrollY;
 
             if (!rafId) render();
-        }
-
-        function syncScroll() {
-            if (!rafId) current = target = window.scrollY;
-        }
-
-        function render() {
-            if (!enabled) return;
-
-            const diff = target - current;
-
-            if (Math.abs(diff) < SmoothConfig.stopThreshold) {
-                current = target;
-                window.scrollTo(0, current);
-                rafId = null;
-                return;
-            }
-
-            current += diff * SmoothConfig.ease;
-            window.scrollTo(0, round(current));
-
-            rafId = requestAnimationFrame(render);
-        }
-
-        function checkState() {
-            const isMobile = window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT;
-            const pageTooShort =
-                document.documentElement.scrollHeight <=
-                window.innerHeight * SmoothConfig.minPageHeightRatio;
-
-            if (isMobile || pageTooShort) {
-                disable();
-                return;
-            }
-
-            enable();
-        }
-
-        function setupAnchors() {
-            document.querySelectorAll('a[href^="#"]').forEach(a => {
-                a.addEventListener("click", e => {
-                    const el = document.querySelector(a.getAttribute("href"));
-                    if (!el) return;
-
-                    if (window.innerWidth < SmoothConfig.MOBILE_BREAKPOINT) return;
-
-                    e.preventDefault();
-                    if (rafId) cancelAnimationFrame(rafId);
-
-                    current = target = window.scrollY;
-                    target = el.getBoundingClientRect().top + window.scrollY + SmoothConfig.offset;
-
-                    render();
-                });
-            });
-        }
-
-        updateScrollBehavior();
-        checkState();
-        setupAnchors();
-
-        window.addEventListener("resize", () => {
-            clearTimeout(window.__smoothResizeTimer);
-            window.__smoothResizeTimer = setTimeout(() => {
-                updateScrollBehavior();
-                checkState();
-            }, 120);
         });
-    }
+    });
+}
 
-    global.initSmoothScroll = initSmoothScroll;
-
-})(window);
-
-// Exemple : augmentation de l'intensité du scroll
-window.addEventListener('load', () => {
-    initSmoothScroll({ scrollMult: 1 }); // Valeur plus élevée = scroll plus rapide
+initSmoothScroll({
+    DEBUG: false,
+    ease: 0.06,
+    scrollMult: 1.2
 });
+
