@@ -2,8 +2,8 @@ function initSmoothScroll(options = {}) {
     const SmoothConfig = {
         DEBUG: false,
         MOBILE_BREAKPOINT: 768,
-        ease: 0.03,
-        scrollMult: 1,
+        ease: 0.06,
+        scrollMult: 1.5,
         stopThreshold: 0.1,
         minPageHeightRatio: 1.05,
         ...options
@@ -157,6 +157,7 @@ function initSmoothScroll(options = {}) {
 initSmoothScroll({
     DEBUG: false,
     ease: 0.06,
-    scrollMult: 1.2
+    scrollMult: 1.5,
 });
+
 
